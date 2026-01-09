@@ -13,7 +13,7 @@ def tracefunc(
     fn: Callable, /, *args, **kwargs
 ) -> dict:
     """
-    Trace `fn(*args, **kwargs)` via sys.settrace (opcode-level), returning a dict:
+    Trace `fn(*args, **kwargs)` via sys.monitoring (opcode-level), returning a dict:
 
         {
           "<source snippet for AST-line>": (
