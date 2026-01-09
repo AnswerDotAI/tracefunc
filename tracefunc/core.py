@@ -1,4 +1,4 @@
-import ast, builtins, dis, inspect, os, sys, textwrap
+import ast, builtins, dis, inspect, os, sys, sysconfig, textwrap
 from fastcore.utils import *
 
 comp_node_types = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
@@ -86,6 +86,27 @@ def tracefunc(fn, /, *args, target_func=None, **kwargs):
 
     stack_anchor = fn.__code__ if target_func is not None else None
     stack_base = os.path.dirname(stack_anchor.co_filename) if stack_anchor else None
+    repls = []
+    venv = os.environ.get("VIRTUAL_ENV")
+    if venv: repls.append((os.path.realpath(venv), "$VIRTUAL_ENV"))
+    home = os.path.expanduser("~")
+    if home: repls.append((os.path.realpath(home), "~"))
+    for p, label in (
+        (sys.prefix, "$PYTHON_PREFIX"),
+        (getattr(sys, "base_prefix", None), "$PYTHON_BASE"),
+        (getattr(sys, "exec_prefix", None), "$PYTHON_EXEC_PREFIX"),
+        (getattr(sys, "base_exec_prefix", None), "$PYTHON_BASE_EXEC_PREFIX"),
+    ):
+        if p: repls.append((os.path.realpath(p), label))
+    paths = sysconfig.get_paths()
+    for key, label in (
+        ("purelib", "$SITE_PACKAGES"),
+        ("platlib", "$PLAT_SITE_PACKAGES"),
+        ("stdlib", "$PYTHON_STDLIB"),
+        ("platstdlib", "$PYTHON_PLAT_STDLIB"),
+    ):
+        if key in paths: repls.append((os.path.realpath(paths[key]), label))
+    repls.sort(key=lambda x: len(x[0]), reverse=True)
     if target_func is None: target_func = fn
 
     try: src_lines, block_first_lineno = inspect.getsourcelines(target_func)
@@ -284,12 +305,19 @@ def tracefunc(fn, /, *args, target_func=None, **kwargs):
                 frames = frames[i:]
                 break
         else: return ""
+        def _shorten(path):
+            if stack_base and path.startswith(stack_base + os.sep):
+                return os.path.relpath(path, stack_base)
+            if not os.path.isabs(path): return path
+            for base, label in repls:
+                if path == base or path.startswith(base + os.sep):
+                    return label + path[len(base):]
+            return path
         out = []
         for fr in frames:
-            path = fr.f_code.co_filename
-            if stack_base and path.startswith(stack_base + os.sep):
-                path = os.path.relpath(path, stack_base)
-            out.append(f"{fr.f_code.co_name} ({path}:{fr.f_lineno})")
+            path = _shorten(fr.f_code.co_filename)
+            name = getattr(fr.f_code, "co_qualname", fr.f_code.co_name)
+            out.append(f"{name} ({path}:{fr.f_lineno})")
         return "\n".join(out)
 
     def _snapshot(call_idx, line_id, frame, *, force=False):

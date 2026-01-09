@@ -108,9 +108,11 @@ This keeps tracing focused to the target function and any nested defs within its
 ### Call stack capture
 
 Each recorded call includes a `stack_str` captured on call entry. The stack is a newline-joined
-list of `func_name (file:line)` frames, filtered so `fn` is the shallowest frame shown (frames
-above `fn` are omitted). For frames under `fn`'s directory, `file` is shown relative to that
-directory; other frames keep full paths. If `target_func` is `None`, `stack_str` is empty.
+list of `qualname (file:line)` frames (so methods include the class name), filtered so `fn` is the
+shallowest frame shown (frames above `fn` are omitted). For frames under `fn`'s directory, `file`
+is shown relative to that directory. Remaining absolute paths are normalized by replacing the
+longest matching prefixes first (e.g., `$SITE_PACKAGES`, `$VIRTUAL_ENV`, `~`, Python prefix paths).
+If `target_func` is `None`, `stack_str` is empty.
 
 ### Mapping execution position to an AST line
 

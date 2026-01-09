@@ -141,6 +141,16 @@ def _wrapper_calls_target_two_places(n):
     return out
 
 
+class _StackClass:
+    def inc(self, x):
+        return x + 1
+
+
+def _wrapper_calls_method(x):
+    obj = _StackClass()
+    return obj.inc(x)
+
+
 # ----------------------------
 # Helpers
 # ----------------------------
@@ -568,3 +578,10 @@ def test_stack_traces_include_target_and_show_two_call_sites():
         assert lines[-1].startswith("_targeted_inner (")
         assert any("_wrapper_calls_target_two_places (" in line for line in lines)
         assert base_dir not in stack
+
+
+def test_stack_traces_include_class_name_for_methods():
+    res_list = tracefunc(_wrapper_calls_method, 3, target_func=_StackClass.inc)
+    assert len(res_list) == 1
+    stack = res_list[0][0]
+    assert any(line.startswith("_StackClass.inc (") for line in stack.splitlines())
