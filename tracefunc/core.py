@@ -33,10 +33,10 @@ def tracefunc(
       and comprehension frames (<listcomp>/<genexpr>/...) are not traced.
     - Nested functions/classes are separate lines and are traced when executed.
     - Snapshots are recorded *after* each line finishes (so assignments show updated values).
-    - Requires Python 3.11+ (PEP 657 fine-grained positions).
+    - Requires Python 3.12+ (sys.monitoring instruction events).
     """
-    if sys.version_info < (3, 11):
-        raise RuntimeError("tracefunc requires Python 3.11+ (PEP 657 fine-grained positions).")
+    if sys.version_info < (3, 12):
+        raise RuntimeError("tracefunc requires Python 3.12+ (sys.monitoring instruction events).")
 
     try:
         src_lines, block_first_lineno = inspect.getsourcelines(fn)
@@ -331,53 +331,73 @@ def tracefunc(
     # Per-frame current line id (tracked by id(frame); removed on return/exception).
     current_stmt_by_fid: dict[int, int | None] = {}
 
-    def tracer(frame: types.FrameType, event: str, arg: Any):
-        code = frame.f_code
+    def _run_with_monitoring() -> None:
+        monitoring = sys.monitoring
+        tool_id = None
+        for tid in range(0, 16):
+            try:
+                monitoring.use_tool_id(tid, "tracefunc")
+                tool_id = tid
+                break
+            except Exception:
+                continue
+        if tool_id is None:
+            raise RuntimeError("tracefunc could not acquire a sys.monitoring tool id.")
 
-        if event == "call":
-            if _should_trace_code(code):
-                frame.f_trace_opcodes = True
-                current_stmt_by_fid[id(frame)] = None
-                return tracer
-            return None
-
-        if not _should_trace_code(code):
-            return None
-
-        fid = id(frame)
-
-        if event == "opcode":
-            pos = _positions_for(code).get(frame.f_lasti)
+        def _mon_instruction(code: types.CodeType, offset: int) -> None:
+            if not _should_trace_code(code):
+                return
+            pos = _positions_for(code).get(offset)
             if not pos:
-                return tracer
-
+                return
+            frame = sys._getframe(1)
             ln, col = pos
             cur = _lookup_line_id(ln, col)
             if cur is None:
-                return tracer
-
+                return
+            fid = id(frame)
             prev = current_stmt_by_fid.get(fid)
             if prev is None:
                 current_stmt_by_fid[fid] = cur
             elif prev != cur:
-                _snapshot(prev, frame)  # record after prev finished
+                _snapshot(prev, frame)
                 current_stmt_by_fid[fid] = cur
-            return tracer
 
-        if event in ("return", "exception"):
+        def _mon_start(code: types.CodeType, offset: int) -> None:
+            if not _should_trace_code(code):
+                return
+            frame = sys._getframe(1)
+            current_stmt_by_fid[id(frame)] = None
+
+        def _mon_end(code: types.CodeType, offset: int, _arg: Any) -> None:
+            if not _should_trace_code(code):
+                return
+            frame = sys._getframe(1)
+            fid = id(frame)
             prev = current_stmt_by_fid.pop(fid, None)
             if prev is not None:
                 _snapshot(prev, frame)
-            return tracer
 
-        return tracer
+        events = monitoring.events
+        enabled = (
+            events.INSTRUCTION
+            | events.PY_START
+            | events.PY_RETURN
+            | events.PY_UNWIND
+        )
+        monitoring.set_events(tool_id, enabled)
+        monitoring.register_callback(tool_id, events.INSTRUCTION, _mon_instruction)
+        monitoring.register_callback(tool_id, events.PY_START, _mon_start)
+        monitoring.register_callback(tool_id, events.PY_RETURN, _mon_end)
+        monitoring.register_callback(tool_id, events.PY_UNWIND, _mon_end)
 
-    old_trace = sys.gettrace()
-    sys.settrace(tracer)
-    try:
-        fn(*args, **kwargs)
-    finally:
-        sys.settrace(old_trace)
+        try:
+            fn(*args, **kwargs)
+        finally:
+            monitoring.set_events(tool_id, events.NO_EVENTS)
+            monitoring.free_tool_id(tool_id)
+        return None
+
+    _run_with_monitoring()
 
     return {k: (v["count"], v["vars"]) for k, v in data.items()}
-

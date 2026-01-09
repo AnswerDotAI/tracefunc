@@ -1,4 +1,4 @@
-# Tracefunc: AST‑level execution tracing via `sys.settrace`
+# Tracefunc: AST‑level execution tracing via `sys.monitoring`
 
 ## Summary
 
@@ -8,7 +8,7 @@ This project implements a single entry point:
 tracefunc(fn, *args, **kwargs) -> dict[str, (hit_count, vars_map)]
 ```
 
-It runs the target function under a tracing hook (`sys.settrace`) and returns a structured dictionary keyed by **AST-level “lines”** (statements), not physical lines in the source file. Each key is the **source snippet** for that AST statement. Each value is:
+It runs the target function under instruction-level monitoring (`sys.monitoring`) and returns a structured dictionary keyed by **AST-level “lines”** (statements), not physical lines in the source file. Each key is the **source snippet** for that AST statement. Each value is:
 
 * `hit_count`: how many times that statement was executed
 * `vars_map`: `{var_name: [(type_name, truncated_repr), ...]}`
@@ -21,7 +21,7 @@ The implementation is designed to handle:
 * comprehensions treated as a **single line** (no variable capture from inside them),
 * restoration of any pre-existing tracing function even on exceptions.
 
-It intentionally targets **Python 3.11+** to rely on PEP 657 fine-grained source positions.
+It intentionally targets **Python 3.12+** to rely on sys.monitoring instruction events (and PEP 657 fine-grained source positions).
 
 ---
 
@@ -77,24 +77,24 @@ The implementation is split conceptually into two phases:
    * collect variable names mentioned per node
    * compute per-node source spans in file coordinates
 
-2. **Dynamic tracing (sys.settrace + opcode positions)**
+2. **Dynamic tracing (sys.monitoring + instruction positions)**
 
-   * enable opcode-level tracing (`frame.f_trace_opcodes = True`)
+   * enable instruction-level monitoring (via `sys.monitoring`)
    * map current `(lineno, col_offset)` to the correct AST statement span
    * count hits and snapshot variables
 
 ---
 
-## Why opcode-level tracing is needed
+## Why instruction-level tracing is needed
 
 `sys.settrace` “line” events are too coarse for this spec because they report only the **physical line number**. If multiple statements exist on one physical line (semicolon-separated), line events cannot distinguish them reliably.
 
-Python 3.11 introduces fine-grained instruction positions (PEP 657), allowing mapping of each opcode to a `(lineno, col_offset)` pair. By switching to opcode tracing:
+Python 3.11 introduces fine-grained instruction positions (PEP 657), allowing mapping of each instruction to a `(lineno, col_offset)` pair. By switching to instruction-level monitoring in Python 3.12:
 
 * you can tell **which statement** is currently executing, even on the same physical line,
 * you can detect statement transitions by observing changes in `(lineno, col)` and matching to AST statement spans.
 
-This is the core reason the implementation requires Python 3.11+.
+This is the core reason the implementation requires Python 3.12+.
 
 ---
 
@@ -180,8 +180,8 @@ For each executing frame, the tracer:
 
 1. uses `dis.get_instructions(code)` to build a map:
 
-   * `offset -> (lineno, col_offset)` for opcodes with valid positions
-2. on each `opcode` event, looks up the current position
+   * `offset -> (lineno, col_offset)` for instructions with valid positions
+2. on each `INSTRUCTION` event, looks up the current position
 3. finds the **smallest AST statement span** (precomputed) that contains `(lineno, col)`
 
 This approach allows multiple statements on the same physical line to be differentiated.
@@ -193,10 +193,10 @@ A key behavioral choice: snapshots are taken *after* a statement finishes, not w
 Mechanism:
 
 * maintain `current_stmt_id` per frame
-* on opcode events, when the statement id changes:
+* on instruction events, when the statement id changes:
 
   * snapshot values for the previous statement
-* on `return` / `exception`, snapshot the current statement and clean up
+* on `PY_RETURN` / `PY_UNWIND`, snapshot the current statement and clean up
 
 This makes assignment lines much more intuitive:
 
@@ -216,10 +216,10 @@ Truncation is performed on the `repr` string to 50 characters.
 
 ### Trace restoration guarantees
 
-The implementation saves `old_trace = sys.gettrace()` and restores it in a `finally` block. This matters because:
+The implementation enables `sys.monitoring` events and always disables them in a `finally` block. This matters because:
 
-* pytest, debuggers, and coverage tools may already have a tracing function installed
-* a leaked trace function can break unrelated code and tests
+* pytest, debuggers, and coverage tools may already have monitoring or tracing enabled
+* leaked monitoring events can break unrelated code and tests
 
 The tests explicitly verify restoration in both normal and exception paths.
 
@@ -230,7 +230,7 @@ The tests explicitly verify restoration in both normal and exception paths.
 These are not “bugs”, but important realities of implementing this spec on CPython:
 
 * **Compound statement header hit counts are not always obvious**
-  For example, the `for ...:` header may correspond to opcodes executed once or multiple times depending on compiler details. Tests generally verify presence rather than exact header counts for loops/conditionals.
+  For example, the `for ...:` header may correspond to instructions executed once or multiple times depending on compiler details. Tests generally verify presence rather than exact header counts for loops/conditionals.
 
 * **Key snippets are best-effort slices**
   The implementation slices from source text using AST positions; for unusual formatting, very long multiline expressions, or edge cases, the fallback may use `ast.unparse`.
@@ -254,7 +254,7 @@ The test suite is designed around:
 * nested defs/classes,
 * restoration of tracing state.
 
-All tests are skipped automatically on Python < 3.11.
+All tests are skipped automatically on Python < 3.12.
 
 ### What the tests cover
 
@@ -359,7 +359,7 @@ If you want the tool to remain useful but dramatically simplify the implementati
 **Simplification:**
 
 * Can use `sys.settrace` `"line"` events.
-* No opcode mapping, no column offsets, no PEP 657 dependency.
+* No instruction mapping, no column offsets, no PEP 657 dependency.
 * Works on Python 3.8+ (and earlier).
 
 **Tradeoff:** loses the ability to distinguish semicolon-separated statements.
@@ -373,7 +373,7 @@ If you want the tool to remain useful but dramatically simplify the implementati
 **Simplification:**
 
 * Still can use `"line"` events.
-* Or keep AST but don’t need opcode-level positions.
+* Or keep AST but don’t need instruction-level positions.
 
 **Tradeoff:** less precision; still useful for typical code style.
 
@@ -614,7 +614,7 @@ Useful in:
 
 ## Conclusion
 
-The implementation meets a fairly demanding spec: statement-level keys derived from AST, opcode-level mapping for correct statement discrimination on a single physical line, exclusion of comprehension internals, and full restoration of prior tracing state.
+The implementation meets a fairly demanding spec: statement-level keys derived from AST, instruction-level mapping for correct statement discrimination on a single physical line, exclusion of comprehension internals, and full restoration of prior tracing state.
 
 The tests are intentionally targeted at:
 
@@ -625,4 +625,3 @@ The tests are intentionally targeted at:
 * and invariants (sample limits, repr truncation, trace restoration).
 
 If you decide this tool is primarily for debugging and education (rather than a strict statement-coverage engine), relaxing the “AST line” requirement to physical lines or reducing value-capture scope are the two biggest simplification opportunities while keeping it broadly useful.
-

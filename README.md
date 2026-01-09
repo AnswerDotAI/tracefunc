@@ -14,7 +14,7 @@ each statement ran and what values the variables held at each execution.
 pip install tracefunc
 ```
 
-Requires Python 3.11+ (uses PEP 657 source positions).
+Requires Python 3.12+ (uses sys.monitoring instruction events).
 
 ## How to use
 

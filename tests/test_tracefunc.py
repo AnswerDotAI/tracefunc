@@ -8,8 +8,8 @@ from tracefunc import tracefunc
 
 
 pytestmark = pytest.mark.skipif(
-    sys.version_info < (3, 11),
-    reason="tracefunc requires Python 3.11+ (PEP 657 fine-grained positions).",
+    sys.version_info < (3, 12),
+    reason="tracefunc requires Python 3.12+ (sys.monitoring instruction events).",
 )
 
 
@@ -102,6 +102,12 @@ def _class_and_method():
 def _raises():
     x = 1
     raise ValueError("boom")
+
+
+def _first_call_demo(n):
+    total = 0
+    for i in range(n): total += i
+    return total
 
 
 # ----------------------------
@@ -427,3 +433,22 @@ def test_restores_previous_trace_even_when_traced_function_raises():
     after = sys.gettrace()
     assert after is before
 
+
+def test_first_call_records_hits():
+    res1 = tracefunc(_first_call_demo, 3)
+    res2 = tracefunc(_first_call_demo, 3)
+
+    _, (c_total, _) = _get_entry(res1, "total = 0")
+    _, (c_for, _) = _get_entry(res1, "for i in range(n):")
+    _, (c_add, _) = _get_entry(res1, "total += i")
+    _, (c_ret, _) = _get_entry(res1, "return total")
+    assert (c_total, c_add, c_ret) == (1, 3, 1)
+    assert c_for >= 3
+
+    # Second call should be consistent with the first.
+    _, (c_total2, _) = _get_entry(res2, "total = 0")
+    _, (c_for2, _) = _get_entry(res2, "for i in range(n):")
+    _, (c_add2, _) = _get_entry(res2, "total += i")
+    _, (c_ret2, _) = _get_entry(res2, "return total")
+    assert (c_total2, c_add2, c_ret2) == (1, 3, 1)
+    assert c_for2 >= 3
