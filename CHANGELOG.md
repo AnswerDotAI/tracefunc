@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 0.0.5
+
+### New Features
+
+- Add comprehension tracing, per-call results with stack info, and target_func parameter ([#2](https://github.com/AnswerDotAI/tracefunc/issues/2))
+
+
 ## 0.0.3
 
 ### Bugs Squashed
