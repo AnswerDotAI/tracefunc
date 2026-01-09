@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 0.0.6
+
+### New Features
+
+- Show qualname in stack traces and normalize paths with env prefixes ([#3](https://github.com/AnswerDotAI/tracefunc/issues/3))
+
+
 ## 0.0.5
 
 ### New Features
