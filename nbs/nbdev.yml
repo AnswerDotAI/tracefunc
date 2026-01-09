@@ -1,0 +1,9 @@
+project:
+  output-dir: _docs
+
+website:
+  title: "tracefunc"
+  site-url: "https://AnswerDotAI.github.io/tracefunc"
+  description: "AST-level execution tracing via sys.settrace"
+  repo-branch: main
+  repo-url: "https://github.com/AnswerDotAI/tracefunc"
