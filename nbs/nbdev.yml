@@ -4,6 +4,6 @@ project:
 website:
   title: "tracefunc"
   site-url: "https://AnswerDotAI.github.io/tracefunc"
-  description: "AST-level execution tracing via sys.settrace"
+  description: "AST-level execution tracing via sys.monitoring"
   repo-branch: main
   repo-url: "https://github.com/AnswerDotAI/tracefunc"
