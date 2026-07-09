@@ -2,6 +2,13 @@
 
 <!-- do not remove -->
 
+## 0.0.7
+
+### New Features
+
+- Add TraceResults with exc capture, `incl_unhit` filtering, and pyskills entry point ([#4](https://github.com/AnswerDotAI/tracefunc/issues/4))
+
+
 ## 0.0.6
 
 ### New Features
@@ -13,7 +20,7 @@
 
 ### New Features
 
-- Add comprehension tracing, per-call results with stack info, and target_func parameter ([#2](https://github.com/AnswerDotAI/tracefunc/issues/2))
+- Add comprehension tracing, per-call results with stack info, and `target_func` parameter ([#2](https://github.com/AnswerDotAI/tracefunc/issues/2))
 
 
 ## 0.0.3
