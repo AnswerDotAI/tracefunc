@@ -355,6 +355,12 @@ def test_generator_expression_key_is_parenthesized():
 def test_nested_function_body_present_but_not_hit_when_not_called():
     _, res = _call_entry(tracefunc(_nested_not_called)[0])
 
+    # Unhit lines are excluded by default: def inner, return 0 => total 2.
+    assert len(res) == 2
+    assert "b = a + 1" not in {k.strip() for k in res}
+
+    _, res = _call_entry(tracefunc(_nested_not_called, incl_unhit=True)[0])
+
     # Statements: def inner, return 0, plus inner body (b=..., return b) => total 4.
     assert len(res) == 4
 
@@ -501,14 +507,16 @@ def test_traces_class_body_and_method_body_when_method_is_called():
     assert v_ret["t"] == [("int", "12")]
 
 
-def test_restores_previous_trace_even_when_traced_function_raises():
+def test_exception_returns_traces_and_restores_trace():
     before = sys.gettrace()
 
-    with pytest.raises(ValueError):
-        tracefunc(_raises)
+    res = tracefunc(_raises)
 
-    after = sys.gettrace()
-    assert after is before
+    assert sys.gettrace() is before
+    assert isinstance(res.exc, ValueError)
+    _, trace = _call_entry(res[0])
+    _, (c_x, v_x) = _get_entry(trace, "x = 1")
+    assert c_x == 1 and v_x["x"] == [("int", "1")]
 
 
 def test_first_call_records_hits_and_second_call_is_consistent():

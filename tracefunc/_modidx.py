@@ -5,4 +5,4 @@ d = { 'settings': { 'branch': 'main',
                 'doc_host': 'https://AnswerDotAI.github.io',
                 'git_url': 'https://github.com/AnswerDotAI/tracefunc',
                 'lib_path': 'tracefunc'},
-  'syms': {'tracefunc.core': {}}}
+  'syms': {'tracefunc.core': {}, 'tracefunc.skill': {}}}

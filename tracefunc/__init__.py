@@ -1,3 +1,3 @@
 __version__ = "0.0.7"
-from .core import tracefunc
+from .core import tracefunc, TraceResults
 

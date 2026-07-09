@@ -46,8 +46,12 @@ class NameCollector(ast.NodeVisitor):
             if isinstance(node, comp_node_types) and not isinstance(self.root_node, comp_node_types): return
         super().generic_visit(node)
 
+class TraceResults(list):
+    "Result of `tracefunc`: a list of per-call traces; `exc` holds the exception `fn` raised, if any"
+    exc = None
 
-def tracefunc(fn, /, *args, target_func=None, **kwargs):
+
+def tracefunc(fn, /, *args, target_func=None, incl_unhit=False, **kwargs):
     """
     Trace execution using sys.monitoring (Python 3.12+), returning a list of per-call traces.
 
@@ -55,10 +59,14 @@ def tracefunc(fn, /, *args, target_func=None, **kwargs):
       - `fn(*args, **kwargs)` is executed.
       - `target_func` (optional) selects which function's calls are recorded.
         Defaults to `fn` for backwards compatibility.
+      - `incl_unhit` includes lines that never executed (hit count 0) in the traces.
 
     Return:
-      - list of length <= 10
+      - `TraceResults`, a `list` of length <= 10, with an `exc` attribute: if `fn` raised, the
+        exception is caught and stored there (`None` otherwise), and the traces gathered up to
+        the raise are still returned
       - one element per call to `target_func` (including recursion)
+      - lines that never executed are omitted unless `incl_unhit=True`
       - each element is: (stack_str, trace_dict)
 
         stack_str: call stack string (filtered so `fn` is the shallowest frame shown)
@@ -425,12 +433,17 @@ def tracefunc(fn, /, *args, target_func=None, **kwargs):
         monitoring.register_callback(tool_id, events.PY_UNWIND, _mon_end)
         monitoring.register_callback(tool_id, events.INSTRUCTION, _mon_instruction)
 
+        exc = None
         try: fn(*args, **kwargs)
+        except Exception as e: exc = e
         finally:
             monitoring.set_events(tool_id, events.NO_EVENTS)
             monitoring.free_tool_id(tool_id)
+        return exc
 
-    _run_with_monitoring()
+    exc = _run_with_monitoring()
 
     # Convert per-call states into the requested output format.
-    return [(st.stack, {k: (v["count"], v["vars"]) for k, v in st.data.items()}) for st in calls]
+    res = TraceResults((st.stack, {k: (v["count"], v["vars"]) for k, v in st.data.items() if v["count"] or incl_unhit}) for st in calls)
+    res.exc = exc
+    return res

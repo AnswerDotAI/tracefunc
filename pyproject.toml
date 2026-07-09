@@ -21,6 +21,9 @@ Documentation = "https://AnswerDotAI.github.io/tracefunc"
 [project.entry-points.nbdev]
 tracefunc = "tracefunc._modidx:d"
 
+[project.entry-points.pyskills]
+tracefunc = "tracefunc.skill"
+
 [tool.setuptools.dynamic]
 version = {attr = "tracefunc.__version__"}
 
