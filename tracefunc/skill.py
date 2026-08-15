@@ -1,4 +1,4 @@
-"""Trace a Python function's execution at AST-line level: per-line hit counts and live variable values, via `sys.monitoring`. Use when debugging *why* code takes a branch, loops, recurses, or computes a wrong value, without editing the code under investigation or using an interactive debugger.
+"""See what a Python function did, line by line: how many times each line ran and what the variables held. Use when working out why code takes a branch, loops, recurses, or computes a wrong value, without changing that code or stepping through a debugger.
 
 ## When to reach for this
 
