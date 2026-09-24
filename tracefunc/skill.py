@@ -2,7 +2,7 @@
 
 ## When to reach for this
 
-Any "why does this function do X?" question that source reading alone doesn't settle: which branch fired and with what values, what a loop saw per iteration, what arguments each (possibly recursive) call received. One call replaces print-debugging (no edits to the target code) and pdb (no interactive stepping): the whole story comes back as one readable data structure.
+Any "why does this function do X?" that source reading alone doesn't settle: which branch fired and with what values, what a loop saw each iteration, what arguments each (possibly recursive) call received. One call replaces print-debugging (no edits to the target code) and pdb (no interactive stepping); the whole story comes back as one readable data structure.
 
 ## Usage
 
@@ -14,12 +14,9 @@ Any "why does this function do X?" question that source reading alone doesn't se
         print(stack)                       # who called it, filtered to relevant frames
         for snippet, (hits, vars_) in trace.items(): print(snippet, hits, vars_)
 
-- `tracefunc(fn, *args, target_func=None, incl_unhit=False, **kwargs)` runs `fn(*args, **kwargs)` and records every call of `target_func` (default: `fn` itself).
-- Returns `TraceResults`: a list of up to 10 `(stack_str, trace_dict)` pairs, one per call (recursion included). `trace_dict` maps each executed AST-level line (separate `;`-statements and comprehensions included) to `(hit_count, {var: [(type_name, truncated_repr), ...]})` with up to 10 samples per variable, recorded after the line runs.
-- If `fn` raises, the exception is caught and stored in `TraceResults.exc`, and the traces gathered up to the raise are still returned: crash investigation is the main use case, so a raising `fn` is normal, not an error.
-- Lines that never executed are omitted; pass `incl_unhit=True` to see them with hit count 0 (useful for "why is this branch never taken?").
-- For runaway recursion, lower `sys.setrecursionlimit` first so the run finishes quickly; the 10-call cap keeps output bounded either way.
-- Requires Python 3.12+.
+`tracefunc` runs `fn(*args, **kwargs)` and records each call of `target_func` (default `fn`). `doc(tracefunc)` describes the result: at most 10 calls, each a call stack plus a map from every executed line to its hit count and up to 10 samples per variable. Needs Python 3.12+.
+
+Crash investigation is the main use: if `fn` raises, the exception is stored in `traces.exc` and the traces gathered up to the raise are still returned, so a raising `fn` is normal, not an error. `incl_unhit=True` includes lines that never ran, with hit count 0, to see why a branch is never taken. For runaway recursion, lower `sys.setrecursionlimit` first so the run finishes quickly; the 10-call cap bounds the output either way.
 """
 
 from .core import tracefunc, TraceResults
