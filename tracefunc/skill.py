@@ -16,7 +16,7 @@ Any "why does this function do X?" that source reading alone doesn't settle: whi
 
 `tracefunc` runs `fn(*args, **kwargs)` and records each call of `target_func` (default `fn`). `doc(tracefunc)` describes the result: at most 10 calls, each a call stack plus a map from every executed line to its hit count and up to 10 samples per variable. Needs Python 3.12+.
 
-Crash investigation is the main use: if `fn` raises, the exception is stored in `traces.exc` and the traces gathered up to the raise are still returned, so a raising `fn` is normal, not an error. `incl_unhit=True` includes lines that never ran, with hit count 0, to see why a branch is never taken. For runaway recursion, lower `sys.setrecursionlimit` first so the run finishes quickly; the 10-call cap bounds the output either way.
+If `fn` raises, the exception is stored in `traces.exc` and the traces gathered up to the raise are still returned, so a raising `fn` is normal, not an error. `incl_unhit=True` includes lines that never ran, with hit count 0, to see why a branch is never taken. For runaway recursion, lower `sys.setrecursionlimit` first so the run finishes quickly; the 10-call cap bounds the output either way.
 """
 
 from .core import tracefunc, TraceResults
